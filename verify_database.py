@@ -53,19 +53,18 @@ def verify_database():
             print(f"Index '{idx}' exists")
         else:
             print(f"Index '{idx}' missing")
-    
-    # Przykładowe dane
+
     print("\n4. Data head:")
     print("\nMovies (top 5):")
     for row in cursor.execute("SELECT movieId, title FROM movies LIMIT 5"):
         print(f"     • [{row[0]}] {row[1]}")
     
     print("\nRatings (top 5):")
-    for row in cursor.execute("SELECT userId, movieId, rating FROM ratings LIMIT 5"):
+    for row in cursor.execute("SELECT r.userId, m.title, r.rating FROM ratings r join movies m on r.movieID = m.movieID  LIMIT 5"):
         print(f"     • User {row[0]} rated {row[1]} with {row[2]}")
     
     print("\nTags (top 5):")
-    for row in cursor.execute("SELECT userId, movieId, tag FROM tags LIMIT 5"):
+    for row in cursor.execute("SELECT t.userId, m.title, t.tag FROM tags t join movies m on t.movieID = m.movieID LIMIT 5"):
         print(f"     • User {row[0]}: '{row[2]}' for {row[1]}")
     
     conn.close()
