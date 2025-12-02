@@ -27,6 +27,16 @@ class Database:
         cursor = self.conn.cursor()
 
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL UNIQUE,
+                hashed_password TEXT NOT NULL,
+                roles TEXT NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS movies (
                 movieId INTEGER PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -301,6 +311,46 @@ class Database:
     def delete_tag(self, tag_id: int):
         cursor = self.conn.cursor()
         cursor.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+        self.conn.commit()
+        return cursor.rowcount
+
+    # User methods
+    def get_users(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, username, email, hashed_password, roles FROM users")
+        return cursor.fetchall()
+
+    def get_user_by_id(self, user_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, username, email, hashed_password, roles FROM users WHERE id = ?", (user_id,))
+        return cursor.fetchone()
+
+    def get_user_by_username(self, username: str):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, username, email, hashed_password, roles FROM users WHERE username = ?", (username,))
+        return cursor.fetchone()
+
+    def create_user(self, username: str, email: str, hashed_password: str, roles: str):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (username, email, hashed_password, roles) VALUES (?, ?, ?, ?)",
+            (username, email, hashed_password, roles)
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def update_user(self, user_id: int, username: str, email: str, hashed_password: str, roles: str):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE users SET username = ?, email = ?, hashed_password = ?, roles = ? WHERE id = ?",
+            (username, email, hashed_password, roles, user_id)
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
+    def delete_user(self, user_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
         self.conn.commit()
         return cursor.rowcount
 

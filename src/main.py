@@ -1,13 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 import uvicorn
 from src.models import (
     Movie, Link, Rating, Tag,
     MovieCreate, MovieUpdate,
     LinkCreate, LinkUpdate,
     RatingCreate, RatingUpdate,
-    TagCreate, TagUpdate
+    TagCreate, TagUpdate,
+    UserCreate, LoginRequest, TokenResponse, UserResponse
 )
 from src.database import Database
+from src.security import (
+    hash_password, verify_password, create_access_token,
+    get_current_user, get_current_admin
+)
 
 app = FastAPI(title="Movies API", version="1.0.0")
 
@@ -237,6 +242,77 @@ def delete_tag(tag_id: int):
         raise HTTPException(status_code=404, detail="Tag not found")
 
     return None
+
+
+@app.post("/login", response_model=TokenResponse)
+def login(request: LoginRequest):
+    user_row = db.get_user_by_username(request.username)
+
+    if user_row is None:
+        raise HTTPException(status_code=401, detail="Incorrect username or password!")
+
+    if not verify_password(request.password, user_row['hashed_password']):
+        raise HTTPException(status_code=401, detail="Incorrect username or password!")
+
+    import json
+    roles = json.loads(user_row['roles']) if user_row['roles'] else []
+
+    access_token = create_access_token(
+        user_id=user_row['id'],
+        username=user_row['username'],
+        email=user_row['email'],
+        roles=roles
+    )
+
+    user_response = UserResponse(
+        id=user_row['id'],
+        username=user_row['username'],
+        email=user_row['email'],
+        roles=roles
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
+
+
+@app.post("/users", status_code=201, response_model=UserResponse)
+def create_user(user: UserCreate, current_admin: dict = Depends(get_current_admin)):
+    import json
+
+    existing_user = db.get_user_by_username(user.username)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Użytkownik już istnieje")
+
+    hashed_password = hash_password(user.password)
+
+    roles_json = json.dumps(user.roles)
+
+    user_id = db.create_user(
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_password,
+        roles=roles_json
+    )
+
+    return UserResponse(
+        id=user_id,
+        username=user.username,
+        email=user.email,
+        roles=user.roles
+    )
+
+
+@app.get("/user_details", response_model=UserResponse)
+def get_user_details(current_user: dict = Depends(get_current_user)):
+    return UserResponse(
+        id=current_user['user_id'],
+        username=current_user['username'],
+        email=current_user['email'],
+        roles=current_user['roles']
+    )
 
 
 if __name__ == "__main__":

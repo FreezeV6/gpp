@@ -1,8 +1,42 @@
 from pydantic import BaseModel
+from typing import List
+
+
+class User:
+    def __init__(self, user_id: int, username: str, email: str, roles: List[str]):
+        self.id = user_id
+        self.username = username
+        self.email = email
+        self.roles = roles
+
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+    roles: List[str] = []
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    roles: List[str]
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
 
 
 class Movie:
-    
+
     def __init__(self, movie_id: int, title: str, genres: str):
         self.movieId = movie_id
         self.title = title
