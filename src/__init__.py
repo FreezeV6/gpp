@@ -1,0 +1,2 @@
+"""System producent-konsument"""
+
