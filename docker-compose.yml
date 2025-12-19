@@ -1,0 +1,73 @@
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - app-network
+
+  service-a:
+    build:
+      context: ./service_a
+      dockerfile: Dockerfile
+    container_name: service-a
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./results.db
+    healthcheck:
+      test: curl --fail http://localhost:8000/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  service-b:
+    build:
+      context: ./service_b
+      dockerfile: Dockerfile
+    container_name: service-b
+    ports:
+      - "8002:8000"
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SERVICE_A_URL=http://service-a:8000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  consumer:
+    build:
+      context: ./service_b
+      dockerfile: Dockerfile.consumer
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SERVICE_A_URL=http://service-a:8000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      service-a:
+        condition: service_healthy
+    deploy:
+      replicas: 3
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
