@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 
-from main import app
+from service_b.main import app
 
 
 @pytest.fixture
@@ -13,7 +13,7 @@ def client():
 
 class TestHealthEndpoint:
     def test_health_check_rabbitmq_connected(self, client):
-        with patch('main.check_rabbitmq_connection', return_value=True):
+        with patch('service_b.main.check_rabbitmq_connection', return_value=True):
             response = client.get("/health")
             assert response.status_code == 200
             data = response.json()
@@ -22,7 +22,7 @@ class TestHealthEndpoint:
             assert data["rabbitmq_connected"] is True
 
     def test_health_check_rabbitmq_disconnected(self, client):
-        with patch('main.check_rabbitmq_connection', return_value=False):
+        with patch('service_b.main.check_rabbitmq_connection', return_value=False):
             response = client.get("/health")
             assert response.status_code == 200
             data = response.json()
@@ -32,7 +32,7 @@ class TestHealthEndpoint:
 
 class TestAnalyzeEndpoint:
     def test_analyze_valid_url(self, client):
-        with patch('main.publish_task', return_value=True):
+        with patch('service_b.main.publish_task', return_value=True):
             response = client.post("/analyze", json={
                 "image_url": "https://example.com/image.jpg"
             })
@@ -42,7 +42,7 @@ class TestAnalyzeEndpoint:
             assert "task_id" in data
 
     def test_analyze_with_custom_task_id(self, client):
-        with patch('main.publish_task', return_value=True):
+        with patch('service_b.main.publish_task', return_value=True):
             response = client.post("/analyze", json={
                 "image_url": "https://example.com/image.jpg",
                 "task_id": "custom-task-123"
@@ -64,7 +64,7 @@ class TestAnalyzeEndpoint:
         assert response.status_code == 400
 
     def test_analyze_rabbitmq_unavailable(self, client):
-        with patch('main.publish_task', return_value=False):
+        with patch('service_b.main.publish_task', return_value=False):
             response = client.post("/analyze", json={
                 "image_url": "https://example.com/image.jpg"
             })
@@ -106,14 +106,14 @@ class TestAnalyzeSyncEndpoint:
 
 class TestQueueStatusEndpoint:
     def test_queue_status_connected(self, client):
-        with patch('main.check_rabbitmq_connection', return_value=True):
+        with patch('service_b.main.check_rabbitmq_connection', return_value=True):
             response = client.get("/queue/status")
             assert response.status_code == 200
             data = response.json()
             assert data["rabbitmq_connected"] is True
 
     def test_queue_status_disconnected(self, client):
-        with patch('main.check_rabbitmq_connection', return_value=False):
+        with patch('service_b.main.check_rabbitmq_connection', return_value=False):
             response = client.get("/queue/status")
             assert response.status_code == 200
             data = response.json()
@@ -122,21 +122,21 @@ class TestQueueStatusEndpoint:
 
 class TestAIProcessor:
     def test_validate_image_url_valid_http(self):
-        from ai_processor import validate_image_url
+        from service_b.ai_processor import validate_image_url
         assert validate_image_url("http://example.com/image.jpg") is True
 
     def test_validate_image_url_valid_https(self):
-        from ai_processor import validate_image_url
+        from service_b.ai_processor import validate_image_url
         assert validate_image_url("https://example.com/image.png") is True
 
     def test_validate_image_url_invalid(self):
-        from ai_processor import validate_image_url
+        from service_b.ai_processor import validate_image_url
         assert validate_image_url("ftp://example.com/image.jpg") is False
         assert validate_image_url("not-a-url") is False
         assert validate_image_url("") is False
 
     def test_analyze_image_returns_valid_data(self):
-        from ai_processor import analyze_image
+        from service_b.ai_processor import analyze_image
         people_count, confidence = analyze_image("https://example.com/test.jpg")
 
         assert isinstance(people_count, int)

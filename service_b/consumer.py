@@ -5,8 +5,8 @@ import time
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from ai_processor import analyze_image
-from rabbitmq_client import get_connection, QUEUE_NAME, RESULT_QUEUE_NAME
+from service_b.ai_processor import analyze_image
+from service_b.rabbitmq_client import get_connection, QUEUE_NAME, RESULT_QUEUE_NAME
 
 SERVICE_A_URL = os.getenv("SERVICE_A_URL", "http://localhost:8001")
 CONSUMER_ID = os.getenv("HOSTNAME", f"consumer-{os.getpid()}")

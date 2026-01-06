@@ -3,8 +3,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from main import app
-from database import Base, get_db
+from service_a.main import app
+from service_a.database import Base, get_db
 
 # Test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -64,16 +64,13 @@ class TestResultsEndpoint:
             "confidence": 0.90,
             "status": "completed"
         }
-        # Pierwszy request
         response = client.post("/results", json=result_data)
         assert response.status_code == 201
 
-        # Duplikat
         response = client.post("/results", json=result_data)
         assert response.status_code == 409
 
     def test_get_result(self, client):
-        # Najpierw dodaj
         result_data = {
             "task_id": "test-task-get",
             "image_url": "https://example.com/image.jpg",
@@ -83,7 +80,6 @@ class TestResultsEndpoint:
         }
         client.post("/results", json=result_data)
 
-        # Pobierz
         response = client.get("/results/test-task-get")
         assert response.status_code == 200
         data = response.json()
@@ -95,7 +91,6 @@ class TestResultsEndpoint:
         assert response.status_code == 404
 
     def test_get_all_results(self, client):
-        # Dodaj kilka wyników
         for i in range(5):
             result_data = {
                 "task_id": f"test-task-list-{i}",
@@ -124,7 +119,6 @@ class TestResultsEndpoint:
         response = client.delete("/results/test-task-delete")
         assert response.status_code == 204
 
-        # Sprawdź czy usunięto
         response = client.get("/results/test-task-delete")
         assert response.status_code == 404
 
@@ -135,7 +129,6 @@ class TestResultsEndpoint:
 
 class TestStatsEndpoint:
     def test_get_stats(self, client):
-        # Dodaj kilka wyników
         for i in range(3):
             result_data = {
                 "task_id": f"test-task-stats-{i}",
