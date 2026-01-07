@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List
 
-from service_a.database import get_db, init_db, AIResult
-from service_a.schemas import AIResultCreate, AIResultResponse, HealthResponse
+from database import get_db, init_db, AIResult
+from schemas import AIResultCreate, AIResultResponse, HealthResponse
 
 app = FastAPI(title="Service A - AI Results Storage API")
 

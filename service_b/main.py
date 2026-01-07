@@ -2,9 +2,9 @@ from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import uuid
 
-from service_b.schemas import ImageAnalysisRequest, ImageAnalysisResponse, HealthResponse
-from service_b.rabbitmq_client import publish_task, check_rabbitmq_connection
-from service_b.ai_processor import validate_image_url
+from schemas import ImageAnalysisRequest, ImageAnalysisResponse, HealthResponse
+from rabbitmq_client import publish_task, check_rabbitmq_connection
+from ai_processor import validate_image_url
 
 app = FastAPI(title="Service B - AI People Counting API")
 
@@ -57,7 +57,7 @@ def analyze_image_sync(request: ImageAnalysisRequest):
     Synchroniczna analiza obrazu (bez kolejkowania).
     Używane do testów i małych obciążeń.
     """
-    from service_b.ai_processor import analyze_image as process_image
+    from ai_processor import analyze_image as process_image
 
     if not validate_image_url(request.image_url):
         raise HTTPException(status_code=400, detail="Invalid image URL")

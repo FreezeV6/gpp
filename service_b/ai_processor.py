@@ -1,87 +1,69 @@
 import hashlib
 import os
 from typing import Tuple
-import requests
-from io import BytesIO
-from PIL import Image
+
+import cv2
 import numpy as np
+import imutils
+import requests
 
-# Flaga do wyboru trybu: True = prawdziwy YOLO, False = symulacja (dla testów)
-USE_REAL_YOLO = os.getenv("USE_REAL_YOLO", "false").lower() == "true"
-
-# Lazy loading modelu YOLO
-_yolo_model = None
-
-def _get_yolo_model():
-    """Lazy loading modelu YOLO - ładuje tylko raz przy pierwszym użyciu."""
-    global _yolo_model
-    if _yolo_model is None:
-        from ultralytics import YOLO
-        # Używamy YOLOv8n (nano) - szybki i lekki model
-        # Automatycznie pobierze wagi przy pierwszym uruchomieniu
-        _yolo_model = YOLO("yolov8n.pt")
-    return _yolo_model
+USE_REAL_MODEL = os.getenv("USE_REAL_MODEL", "false").lower() == "true"
 
 
-def _download_image(image_url: str) -> Image.Image:
-    """Pobiera obraz z URL i zwraca jako PIL Image."""
-    response = requests.get(image_url, timeout=10)
-    response.raise_for_status()
-    image = Image.open(BytesIO(response.content))
-    # Konwertuj do RGB jeśli potrzeba (np. dla PNG z alpha channel)
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-    return image
+def process_img(image: cv2.typing.MatLike) -> int:
+    """Count people in image using HOG detector."""
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())  # type: ignore
+    MAX_WIDTH = 1500
+    if image.shape[0] > MAX_WIDTH:
+        ratio = image.shape[0] / MAX_WIDTH
+        image = imutils.resize(image, width=MAX_WIDTH, height=int(image.shape[1] * ratio))
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    regions, weights = hog.detectMultiScale(
+        gray, winStride=(2, 2), padding=(5, 5), scale=1.02
+    )
+    mean = np.mean(weights) if len(weights) > 0 else 0
+    std = np.std(weights) if len(weights) > 0 else 0
+    k = 0.86
+    filtered_objects = []
+    for index, weight in enumerate(weights):
+        if weight >= (mean - k * std):
+            filtered_objects.append(regions[index])
+    return len(filtered_objects)
 
 
-def _analyze_with_yolo(image_url: str) -> Tuple[int, float]:
-    """
-    Rzeczywista analiza obrazu z użyciem modelu YOLO.
-    Wykrywa osoby (klasa 'person' = 0 w COCO dataset) na zdjęciu.
-
-    Returns:
-        Tuple[int, float]: (liczba_osob, srednia_confidence)
-    """
+def _analyze_with_model(image_url: str) -> Tuple[int, float]:
+    """Analyze image from URL and count people using HOG detector."""
     try:
-        # Pobierz obraz
-        image = _download_image(image_url)
+        # Download image
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(image_url, timeout=15, headers=headers)
+        resp.raise_for_status()
 
-        # Załaduj model YOLO
-        model = _get_yolo_model()
+        # Decode
+        image_array = np.asarray(bytearray(resp.content), dtype=np.uint8)
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
 
-        # Wykonaj detekcję
-        results = model(image, verbose=False)
+        if image is None:
+            raise ValueError("Could not decode image")
 
-        # Filtruj tylko osoby (klasa 0 w COCO = 'person')
-        person_class_id = 0
-        people_count = 0
-        confidences = []
+        # Count people
+        people_count = process_img(image)
 
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                cls = int(box.cls[0])
-                conf = float(box.conf[0])
-                if cls == person_class_id:
-                    people_count += 1
-                    confidences.append(conf)
+        # Confidence based on detection
+        confidence = 0.85 if people_count > 0 else 0.0
 
-        # Oblicz średnią confidence (lub 0.0 jeśli brak osób)
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-
-        return people_count, round(avg_confidence, 2)
+        return people_count, round(confidence, 2)
 
     except Exception as e:
-        # W przypadku błędu (np. nie można pobrać obrazu) zwróć 0 osób
-        print(f"[YOLO] Błąd analizy obrazu {image_url}: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"[hog-detector] Error: {image_url}: {e}", flush=True)
         return 0, 0.0
 
 
 def _analyze_simulated(image_url: str) -> Tuple[int, float]:
-    """
-    Symulowana analiza - deterministyczny wynik bazowany na URL.
-    Używana do testów jednostkowych.
-    """
+    """Simulated analysis for testing without real model."""
     url_hash = hashlib.md5(image_url.encode()).hexdigest()
     people_count = int(url_hash[:2], 16) % 21
     confidence_base = int(url_hash[2:4], 16) % 30
@@ -90,29 +72,17 @@ def _analyze_simulated(image_url: str) -> Tuple[int, float]:
 
 
 def analyze_image(image_url: str) -> Tuple[int, float]:
-    """
-    Analizuje obraz i zlicza liczbę osób na zdjęciu.
-
-    Używa modelu YOLOv8 do detekcji osób gdy USE_REAL_YOLO=true,
-    w przeciwnym razie używa symulacji (dla testów).
-
-    Returns:
-        Tuple[int, float]: (liczba_osob, confidence)
-    """
-    if USE_REAL_YOLO:
-        return _analyze_with_yolo(image_url)
+    """Main entry point for image analysis."""
+    if USE_REAL_MODEL:
+        return _analyze_with_model(image_url)
     else:
         return _analyze_simulated(image_url)
+
+
 def validate_image_url(image_url: str) -> bool:
-    """
-    Waliduje czy URL obrazu jest poprawny.
-    W rzeczywistosci sprawdzaloby czy URL prowadzi do obrazu.
-    """
+    """Validate that the URL is a valid image URL."""
     if not image_url:
         return False
-    # Podstawowa walidacja URL
-    valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
     valid_prefixes = ['http://', 'https://']
     has_valid_prefix = any(image_url.lower().startswith(p) for p in valid_prefixes)
-    # Dla testow akceptujemy wszystkie URL z http/https
     return has_valid_prefix
